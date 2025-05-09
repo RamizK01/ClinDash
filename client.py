@@ -5,7 +5,13 @@ import pandas as pd
 
 
 def get_studies(search_expr):
+    '''
+    Pulls studies from ctgov API based on user input search expression.
 
+    Ensure that the search expression is not too generic so that the API does not crash.
+
+    Expressions like "Cancer" are generic. Be more specific such as "Head OR Neck AND Cancer".
+    '''
     base_url = "https://clinicaltrials.gov/api/v2/studies"
     params = {
         "pageSize": 500, 
@@ -36,3 +42,4 @@ def get_studies(search_expr):
     # returns as a json-type list
     return(all_studies)
 
+get_st
