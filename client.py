@@ -41,5 +41,3 @@ def get_studies(search_expr):
     
     # returns as a json-type list
     return(all_studies)
-
-get_st
