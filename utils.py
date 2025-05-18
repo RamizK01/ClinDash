@@ -43,54 +43,61 @@ def get_studies(search_expr):
     return(all_studies)
 
 
-def process_studies(studies):
+def process_studies(studies, type):
     '''
     Process the studies to extract relevant information and convert to a pandas DataFrame.
     '''
     data = pd.json_normalize(studies)
 
-    study_df = data[[
-        "protocolSection.identificationModule.nctId",
-        "protocolSection.identificationModule.organization.fullName",
-        "protocolSection.sponsorCollaboratorsModule.responsibleParty.type",	
-        "protocolSection.identificationModule.organization.class",
-        "protocolSection.identificationModule.briefTitle",
-        "protocolSection.identificationModule.officialTitle",
-        "protocolSection.statusModule.overallStatus",
-        "protocolSection.statusModule.lastKnownStatus",
-        "protocolSection.statusModule.whyStopped",
-        "protocolSection.descriptionModule.briefSummary",
-        "protocolSection.descriptionModule.detailedDescription",
-        "protocolSection.designModule.studyType",
-        "protocolSection.designModule.phases",
-        "protocolSection.designModule.designInfo.allocation",
-        "protocolSection.designModule.designInfo.primaryPurpose",
-        "protocolSection.designModule.designInfo.interventionModel",
-        "protocolSection.designModule.enrollmentInfo.count",
-        "protocolSection.designModule.enrollmentInfo.type",
-        "protocolSection.eligibilityModule.healthyVolunteers",
-        "protocolSection.eligibilityModule.sex",
-        "protocolSection.eligibilityModule.minimumAge",
-        "protocolSection.eligibilityModule.maximumAge",
-        "protocolSection.eligibilityModule.stdAges",
-        "protocolSection.statusModule.startDateStruct.date",
-        "protocolSection.statusModule.primaryCompletionDateStruct.date",  
-        "protocolSection.statusModule.completionDateStruct.date"
-        ]]
-    
-    temp_loc_df = data[["protocolSection.contactsLocationsModule.locations"]]
-
-    for i, study in enumerate(temp_loc_df["protocolSection.contactsLocationsModule.locations"]):
-        # remove empty entries 
-        if isinstance(study, float):
-            continue
+    if type == "general":
+        study_df = data[[
+            "protocolSection.identificationModule.nctId",
+            "protocolSection.identificationModule.organization.fullName",
+            "protocolSection.sponsorCollaboratorsModule.responsibleParty.type",	
+            "protocolSection.identificationModule.organization.class",
+            "protocolSection.identificationModule.briefTitle",
+            "protocolSection.identificationModule.officialTitle",
+            "protocolSection.statusModule.overallStatus",
+            "protocolSection.statusModule.lastKnownStatus",
+            "protocolSection.statusModule.whyStopped",
+            "protocolSection.descriptionModule.briefSummary",
+            "protocolSection.descriptionModule.detailedDescription",
+            "protocolSection.designModule.studyType",
+            "protocolSection.designModule.phases",
+            "protocolSection.designModule.designInfo.allocation",
+            "protocolSection.designModule.designInfo.primaryPurpose",
+            "protocolSection.designModule.designInfo.interventionModel",
+            "protocolSection.designModule.enrollmentInfo.count",
+            "protocolSection.designModule.enrollmentInfo.type",
+            "protocolSection.eligibilityModule.healthyVolunteers",
+            "protocolSection.eligibilityModule.sex",
+            "protocolSection.eligibilityModule.minimumAge",
+            "protocolSection.eligibilityModule.maximumAge",
+            "protocolSection.eligibilityModule.stdAges",
+            "protocolSection.statusModule.startDateStruct.date",
+            "protocolSection.statusModule.primaryCompletionDateStruct.date",  
+            "protocolSection.statusModule.completionDateStruct.date"
+            ]]
         
-        if i == 0:
-            loc_df = pd.json_normalize(study)
+        return(study_df)
+    
+    elif type == "location":
+        temp_loc_df = data[["protocolSection.contactsLocationsModule.locations"]]
 
-        loc_df = pd.concat([loc_df, pd.json_normalize(study)], ignore_index=True)
+        for i, study in enumerate(temp_loc_df["protocolSection.contactsLocationsModule.locations"]):
+            # remove empty entries 
+            if isinstance(study, float):
+                continue
+            
+            if i == 0:
+                loc_df = pd.json_normalize(study)
 
-    return(study_df, loc_df)
+            loc_df = pd.concat([loc_df, pd.json_normalize(study)], ignore_index=True)
+
+        return(loc_df)
+    
+    else:
+        raise ValueError("Invalid type. Use 'general' or 'location'.")
 
 
 
