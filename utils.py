@@ -46,6 +46,7 @@ def get_studies(search_expr):
 def process_studies(studies, type):
     '''
     Process the studies to extract relevant information and convert to a pandas DataFrame.
+    Specify the type of data to extract: "general" or "location".
     '''
     data = pd.json_normalize(studies)
 
