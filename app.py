@@ -8,7 +8,13 @@ app.layout = html.Div(
     [
         html.H1(
             "ClinDash",
-            style={"textAlign": "center", "color": "#0074D9", "fontFamily": "Roboto"},
+            style={
+                "textAlign": "left",
+                "color": "#0074D9",
+                "fontFamily": "Roboto",
+                "marginBottom": "20px",
+                "marginTop": "20px",
+            },
         ),
         html.Div(
             [
