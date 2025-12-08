@@ -1,3 +1,3 @@
-/venv_ClinDash
+.venv/
 test.ipynb
 __pycache__/

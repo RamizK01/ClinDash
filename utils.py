@@ -39,16 +39,6 @@ def get_studies(search_expr):
     # returns as a json-type list
     return all_studies
 
-
-class trials:
-    def __init__(self, search_expr):
-        """
-        Initialize the trials class with a search expression.
-        """
-        self.search_expr = search_expr
-        self.studies = get_studies(search_expr)
-
-
 def process_studies(studies, type):
     """
     Process the studies to extract relevant information and convert to a pandas DataFrame.
@@ -99,21 +89,36 @@ def process_studies(studies, type):
         return study_df
 
     elif type == "location":
-        temp_loc_df = data[["protocolSection.contactsLocationsModule.locations"]]
+        # Extract nctId and locations into a smaller df
+        temp_loc_df = data[
+            [
+                "protocolSection.identificationModule.nctId",
+                "protocolSection.contactsLocationsModule.locations",
+            ]
+        ]
 
-        for i, study in enumerate(
-            temp_loc_df["protocolSection.contactsLocationsModule.locations"]
-        ):
-            # remove empty entries
-            if isinstance(study, float):
+        all_locs = []
+
+        for _, row in temp_loc_df.iterrows():
+            nct_id = row["protocolSection.identificationModule.nctId"]
+            locations = row["protocolSection.contactsLocationsModule.locations"]
+
+            # skip empty / NaN
+            if not isinstance(locations, list) or len(locations) == 0:
                 continue
 
-            if i == 0:
-                loc_df = pd.json_normalize(study)
+            # normalize this study's locations
+            loc_df = pd.json_normalize(locations)
 
-            loc_df = pd.concat([loc_df, pd.json_normalize(study)], ignore_index=True)
+            # attach nctId to every location row
+            loc_df["nctId"] = nct_id
 
-        return loc_df
+            all_locs.append(loc_df)
+
+        # combine all studies’ locations
+        final_loc_df = pd.concat(all_locs, ignore_index=True)
+
+        return final_loc_df
 
     else:
         raise ValueError("Invalid type. Use 'general' or 'location'.")
