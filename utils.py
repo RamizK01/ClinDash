@@ -75,15 +75,15 @@ def process_studies(studies, type):
                 "protocolSection.statusModule.primaryCompletionDateStruct.date",  #
                 "protocolSection.statusModule.completionDateStruct.date",
             ]
-        ]
+        ].copy()
 
         def flatten_data(df):
             # Convert nested columns (dicts/lists) to JSON strings
             for col in df.columns:
                 if df[col].apply(lambda x: isinstance(x, (dict, list))).any():
-                    df[col] = df[col].apply(lambda x: json.dumps(x) if x else "")
+                    df.loc[:, col] = df[col].apply(lambda x: json.dumps(x) if x else "")
             return df
-
+    
         study_df = flatten_data(study_df)
 
         return study_df
@@ -95,7 +95,7 @@ def process_studies(studies, type):
                 "protocolSection.identificationModule.nctId",
                 "protocolSection.contactsLocationsModule.locations",
             ]
-        ]
+        ].copy()
 
         all_locs = []
 
