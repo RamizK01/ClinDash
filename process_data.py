@@ -1,43 +1,42 @@
 import xml.etree.ElementTree as ET
 import pandas as pd
 import os
+import logging
 from pathlib import Path
 from tqdm import tqdm
 from typing import List, Dict, Optional
 from datetime import datetime
 
-def extract_text(element, tag: str, default: str = "") -> str:
-    """Safely extract text from an XML element."""
-    try:
-        elem = element.find(tag)
-        if elem is not None and elem.text:
-            return elem.text.strip()
-    except:
-        pass
-    return default
+# Optional: Set up logging for debugging
+logging.basicConfig(level=logging.WARNING)  # Change to DEBUG for verbose output
+logger = logging.getLogger(__name__)
 
-def extract_text_with_attr(element, tag: str, attr: str = None, default: str = "") -> str:
-    """Safely extract text from an XML element and optionally its attribute."""
+def extract_text(element, tag: str, attr: str = None, default: str = "") -> str:
+    """Safely extract text from an XML element or its attribute."""
     try:
+        if element is None:
+            return default
         elem = element.find(tag)
         if elem is not None:
             if attr:
                 attr_value = elem.get(attr)
                 if attr_value:
                     return attr_value.strip()
-                return default
             elif elem.text:
                 return elem.text.strip()
-    except:
-        pass
+    except (AttributeError, TypeError) as e:
+        logger.debug(f"Error extracting {tag}: {e}")
     return default
 
 def extract_list(element, tag: str) -> List[str]:
     """Extract multiple elements and return as list."""
     try:
+        if element is None:
+            return []
         items = [item.text.strip() for item in element.findall(tag) if item.text]
         return items
-    except:
+    except (AttributeError, TypeError) as e:
+        logger.debug(f"Error extracting list {tag}: {e}")
         return []
 
 def extract_locations(root) -> List[Dict]:
@@ -70,9 +69,8 @@ def extract_locations(root) -> List[Dict]:
                 
                 if loc_data.get('facility_name'):  # Only add if we have at least a facility name
                     locations.append(loc_data)
-    except:
-        pass
-    
+    except (AttributeError, TypeError) as e:
+        logger.debug(f"Error extracting locations: {e}")
     return locations
 
 def parse_clinical_trial(xml_file: str) -> Optional[Dict]:
@@ -116,7 +114,7 @@ def parse_clinical_trial(xml_file: str) -> Optional[Dict]:
             
             # Enrollment
             'enrollment': extract_text(root, 'enrollment'),
-            'enrollment_type': extract_text_with_attr(root, 'enrollment', 'type'),
+            'enrollment_type': extract_text(root, 'enrollment', 'type'),
             
             # Study Design Details
             'allocation': extract_text(study_design_info, 'allocation') if elem_exists(study_design_info) else "",
@@ -160,8 +158,11 @@ def parse_clinical_trial(xml_file: str) -> Optional[Dict]:
         }
         
         return data
+    except ET.ParseError as e:
+        logger.error(f"XML parse error in {xml_file}: {e}")
+        return None
     except Exception as e:
-        print(f"Error parsing {xml_file}: {e}")
+        logger.error(f"Unexpected error parsing {xml_file}: {e}")
         return None
 
 def find_xml_files(data_dir: str, test_mode: bool = False, test_count: int = 100) -> List[str]:
