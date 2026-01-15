@@ -2,6 +2,7 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 import os
 import logging
+import time
 from pathlib import Path
 from tqdm import tqdm
 from typing import List, Dict, Optional
@@ -209,25 +210,45 @@ def process_studies(data_dir: str = "data", output_file: str = "studies.csv",
     if tables is None:
         tables = ['studies', 'conditions', 'interventions', 'collaborators', 'locations', 'text']
     
+    # Start timing
+    start_time = time.time()
+    mode_str = "TEST MODE" if test_mode else "PRODUCTION MODE"
+    print(f"\n{'='*80}")
+    print(f"Starting {mode_str} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"{'='*80}\n")
+    
     print(f"Finding XML files in {data_dir}...")
+    find_start = time.time()
     xml_files = find_xml_files(data_dir, test_mode=test_mode, test_count=test_count)
+    find_time = time.time() - find_start
     
     if not xml_files:
         raise FileNotFoundError("No XML files found")
     
-    print(f"Found {len(xml_files)} XML files")
+    print(f"✓ Found {len(xml_files)} XML files ({find_time:.2f}s)")
     if test_mode:
-        print(f"TEST MODE: Processing {test_count} studies")
+        print(f"✓ TEST MODE: Processing {test_count} studies\n")
+    else:
+        print(f"✓ PRODUCTION MODE: Processing all {len(xml_files)} studies\n")
     
-    # Parse all XML files
+    # Parse all XML files with progress bar
+    print(f"[1/4] Parsing XML files...")
+    parse_start = time.time()
     studies = []
-    for xml_file in tqdm(xml_files, desc="Processing studies"):
+    for xml_file in tqdm(xml_files, desc="Processing studies", unit="file", 
+                         bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]'):
         study_data = parse_clinical_trial(xml_file)
         if study_data:
             studies.append(study_data)
+    parse_time = time.time() - parse_start
+    print(f"✓ Parsing complete: {len(studies)}/{len(xml_files)} studies parsed ({parse_time:.2f}s)\n")
     
     # Create main studies DataFrame (without list columns)
     df_studies = pd.DataFrame(studies)
+    
+    # Extract data into separate tables
+    print(f"[2/4] Extracting data into normalized tables...")
+    extract_start = time.time()
     
     # Extract text fields into separate table
     text_data = []
@@ -273,6 +294,9 @@ def process_studies(data_dir: str = "data", output_file: str = "studies.csv",
                 location['nct_id'] = nct_id
                 locations_data.append(location)
     
+    extract_time = time.time() - extract_start
+    print(f"✓ Data extraction complete ({extract_time:.2f}s)\n")
+    
     # Create DataFrames for each table
     df_text = pd.DataFrame(text_data) if text_data else pd.DataFrame()
     df_conditions = pd.DataFrame(conditions_data) if conditions_data else pd.DataFrame()
@@ -298,6 +322,8 @@ def process_studies(data_dir: str = "data", output_file: str = "studies.csv",
     csv_output_dir.mkdir(parents=True, exist_ok=True)
     
     # Save all CSVs
+    print(f"[3/4] Writing output CSV files...")
+    write_start = time.time()
     files_saved = {}
     
     if 'studies' in tables:
@@ -330,9 +356,26 @@ def process_studies(data_dir: str = "data", output_file: str = "studies.csv",
         df_locations.to_csv(locations_path, index=False)
         files_saved['locations'] = (str(locations_path), df_locations.shape)
     
+    write_time = time.time() - write_start
+    print(f"✓ CSV files written ({write_time:.2f}s)\n")
+    
+    # Calculate total time
+    total_time = time.time() - start_time
+    
     # Print summary
+    print(f"{'=' * 80}")
+    print("✓ PROCESSING COMPLETE!")
+    print(f"{'=' * 80}")
+    print(f"\n[4/4] Summary:")
+    print(f"  • Mode: {mode_str}")
+    print(f"  • Completion Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  • Total Time: {total_time:.2f}s")
+    print(f"    - Finding files: {find_time:.2f}s")
+    print(f"    - Parsing XMLs: {parse_time:.2f}s")
+    print(f"    - Extracting data: {extract_time:.2f}s")
+    print(f"    - Writing CSVs: {write_time:.2f}s")
     print(f"\n{'=' * 80}")
-    print("Processing complete!")
+    print("Output Files:")
     print(f"{'=' * 80}")
     for table_name, (path, shape) in files_saved.items():
         print(f"{table_name:20s} → {path:40s} ({shape[0]:6d} rows × {shape[1]:2d} cols)")
