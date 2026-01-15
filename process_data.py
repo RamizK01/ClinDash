@@ -79,10 +79,6 @@ def parse_clinical_trial(xml_file: str) -> Optional[Dict]:
         tree = ET.parse(xml_file)
         root = tree.getroot()
         
-        # Helper function to safely check if element exists
-        def elem_exists(element):
-            return element is not None
-        
         id_info = root.find('id_info')
         study_design_info = root.find('study_design_info')
         oversight_info = root.find('oversight_info')
@@ -102,7 +98,7 @@ def parse_clinical_trial(xml_file: str) -> Optional[Dict]:
             'official_title': extract_text(root, 'official_title'),
             
             # Study Information
-            'study_type': extract_text(study_design_info, 'study_type') if elem_exists(study_design_info) else extract_text(root, 'study_type'),
+            'study_type': extract_text(study_design_info, 'study_type') if study_design_info is not None else extract_text(root, 'study_type'),
             'phase': extract_text(root, 'phase'),
             'overall_status': extract_text(root, 'overall_status'),
             'why_stopped': extract_text(root, 'why_stopped'),
@@ -117,26 +113,26 @@ def parse_clinical_trial(xml_file: str) -> Optional[Dict]:
             'enrollment_type': extract_text(root, 'enrollment', 'type'),
             
             # Study Design Details
-            'allocation': extract_text(study_design_info, 'allocation') if elem_exists(study_design_info) else "",
-            'intervention_model': extract_text(study_design_info, 'intervention_model') if elem_exists(study_design_info) else "",
-            'primary_purpose': extract_text(study_design_info, 'primary_purpose') if elem_exists(study_design_info) else "",
-            'masking': extract_text(study_design_info, 'masking') if elem_exists(study_design_info) else "",
+            'allocation': extract_text(study_design_info, 'allocation') if study_design_info is not None else "",
+            'intervention_model': extract_text(study_design_info, 'intervention_model') if study_design_info is not None else "",
+            'primary_purpose': extract_text(study_design_info, 'primary_purpose') if study_design_info is not None else "",
+            'masking': extract_text(study_design_info, 'masking') if study_design_info is not None else "",
             
             # Oversight
-            'has_dmc': extract_text(oversight_info, 'has_dmc') if elem_exists(oversight_info) else "",
-            'is_fda_regulated_drug': extract_text(oversight_info, 'is_fda_regulated_drug') if elem_exists(oversight_info) else "",
-            'is_fda_regulated_device': extract_text(oversight_info, 'is_fda_regulated_device') if elem_exists(oversight_info) else "",
+            'has_dmc': extract_text(oversight_info, 'has_dmc') if oversight_info is not None else "",
+            'is_fda_regulated_drug': extract_text(oversight_info, 'is_fda_regulated_drug') if oversight_info is not None else "",
+            'is_fda_regulated_device': extract_text(oversight_info, 'is_fda_regulated_device') if oversight_info is not None else "",
             
             # Sponsor Information
-            'lead_sponsor': extract_text(sponsors, 'lead_sponsor') if elem_exists(sponsors) else "",
-            'collaborators': extract_list(sponsors, 'collaborator') if elem_exists(sponsors) else [],
+            'lead_sponsor': extract_text(sponsors, 'lead_sponsor') if sponsors is not None else "",
+            'collaborators': extract_list(sponsors, 'collaborator') if sponsors is not None else [],
             'source': extract_text(root, 'source'),
             
             # Study Population
-            'gender': extract_text(eligibility, 'gender') if elem_exists(eligibility) else "",
-            'minimum_age': extract_text(eligibility, 'minimum_age') if elem_exists(eligibility) else "",
-            'maximum_age': extract_text(eligibility, 'maximum_age') if elem_exists(eligibility) else "",
-            'accepts_healthy_volunteers': extract_text(eligibility, 'accepts_healthy_volunteers') if elem_exists(eligibility) else "",
+            'gender': extract_text(eligibility, 'gender') if eligibility is not None else "",
+            'minimum_age': extract_text(eligibility, 'minimum_age') if eligibility is not None else "",
+            'maximum_age': extract_text(eligibility, 'maximum_age') if eligibility is not None else "",
+            'accepts_healthy_volunteers': extract_text(eligibility, 'accepts_healthy_volunteers') if eligibility is not None else "",
             
             # Conditions (as list)
             'conditions': extract_list(root, 'condition'),
@@ -151,10 +147,10 @@ def parse_clinical_trial(xml_file: str) -> Optional[Dict]:
             'number_of_arms': extract_text(root, 'number_of_arms'),
             
             # Brief Summary
-            'brief_summary': extract_text(brief_summary, 'textblock') if elem_exists(brief_summary) else "",
+            'brief_summary': extract_text(brief_summary, 'textblock') if brief_summary is not None else "",
             
             # Detailed Description
-            'detailed_description': extract_text(detailed_description, 'textblock') if elem_exists(detailed_description) else "",
+            'detailed_description': extract_text(detailed_description, 'textblock') if detailed_description is not None else "",
         }
         
         return data
@@ -171,16 +167,16 @@ def find_xml_files(data_dir: str, test_mode: bool = False, test_count: int = 100
     
     # Find the latest data directory if data_dir is 'data'
     if data_dir == 'data':
-        data_path = Path(data_dir)
+        data_path = Path(data_dir) / 'xml'
         if not data_path.exists():
-            raise FileNotFoundError(f"Data directory '{data_dir}' not found")
+            raise FileNotFoundError(f"Data directory '{data_path}' not found")
         
         # Get subdirectories sorted by date (newest first), excluding 'output'
         subdirs = sorted([d for d in data_path.iterdir() if d.is_dir() and d.name.startswith('data_')], 
                         key=lambda x: x.name, reverse=True)
         
         if not subdirs:
-            raise FileNotFoundError(f"No data subdirectories found in '{data_dir}'")
+            raise FileNotFoundError(f"No data subdirectories found in '{data_path}'")
         
         latest_dir = subdirs[0]
         print(f"Using latest data directory: {latest_dir.name}")
@@ -196,8 +192,22 @@ def find_xml_files(data_dir: str, test_mode: bool = False, test_count: int = 100
     return xml_files
 
 def process_studies(data_dir: str = "data", output_file: str = "studies.csv", 
-                   test_mode: bool = False, test_count: int = 100):
-    """Process all clinical trial XML files and save to normalized CSVs."""
+                   test_mode: bool = False, test_count: int = 100,
+                   tables: List[str] = None):
+    """Process all clinical trial XML files and save to normalized CSVs.
+    
+    Args:
+        data_dir: Path to data directory
+        output_file: Output CSV file name prefix
+        test_mode: Whether to run in test mode
+        test_count: Number of studies to process in test mode
+        tables: List of tables to generate. Options: 'studies', 'conditions', 'interventions', 
+                'collaborators', 'locations', 'text'. If None, all are generated.
+    """
+    
+    # Default to all tables if not specified
+    if tables is None:
+        tables = ['studies', 'conditions', 'interventions', 'collaborators', 'locations', 'text']
     
     print(f"Finding XML files in {data_dir}...")
     xml_files = find_xml_files(data_dir, test_mode=test_mode, test_count=test_count)
@@ -219,72 +229,106 @@ def process_studies(data_dir: str = "data", output_file: str = "studies.csv",
     # Create main studies DataFrame (without list columns)
     df_studies = pd.DataFrame(studies)
     
+    # Extract text fields into separate table
+    text_data = []
+    if 'text' in tables:
+        for idx, row in df_studies.iterrows():
+            text_data.append({
+                'nct_id': row['nct_id'],
+                'official_title': row['official_title'],
+                'brief_summary': row['brief_summary'],
+                'detailed_description': row['detailed_description']
+            })
+    
     # Extract conditions into separate table
     conditions_data = []
-    for idx, row in df_studies.iterrows():
-        nct_id = row['nct_id']
-        for condition in row['conditions']:
-            conditions_data.append({'nct_id': nct_id, 'condition': condition})
-    df_conditions = pd.DataFrame(conditions_data)
+    if 'conditions' in tables:
+        for idx, row in df_studies.iterrows():
+            nct_id = row['nct_id']
+            for condition in row['conditions']:
+                conditions_data.append({'nct_id': nct_id, 'condition': condition})
     
     # Extract interventions into separate table
     interventions_data = []
-    for idx, row in df_studies.iterrows():
-        nct_id = row['nct_id']
-        for intervention in row['interventions']:
-            interventions_data.append({'nct_id': nct_id, 'intervention_type': intervention})
-    df_interventions = pd.DataFrame(interventions_data)
+    if 'interventions' in tables:
+        for idx, row in df_studies.iterrows():
+            nct_id = row['nct_id']
+            for intervention in row['interventions']:
+                interventions_data.append({'nct_id': nct_id, 'intervention_type': intervention})
     
     # Extract collaborators into separate table
     collaborators_data = []
-    for idx, row in df_studies.iterrows():
-        nct_id = row['nct_id']
-        for collaborator in row['collaborators']:
-            collaborators_data.append({'nct_id': nct_id, 'collaborator': collaborator})
-    df_collaborators = pd.DataFrame(collaborators_data)
+    if 'collaborators' in tables:
+        for idx, row in df_studies.iterrows():
+            nct_id = row['nct_id']
+            for collaborator in row['collaborators']:
+                collaborators_data.append({'nct_id': nct_id, 'collaborator': collaborator})
     
     # Extract locations into separate table
     locations_data = []
-    for idx, row in df_studies.iterrows():
-        nct_id = row['nct_id']
-        for location in row['locations']:
-            location['nct_id'] = nct_id
-            locations_data.append(location)
-    df_locations = pd.DataFrame(locations_data)
+    if 'locations' in tables:
+        for idx, row in df_studies.iterrows():
+            nct_id = row['nct_id']
+            for location in row['locations']:
+                location['nct_id'] = nct_id
+                locations_data.append(location)
     
-    # Remove list columns from main studies table
-    df_studies = df_studies.drop(columns=['conditions', 'interventions', 'collaborators', 'locations'])
+    # Create DataFrames for each table
+    df_text = pd.DataFrame(text_data) if text_data else pd.DataFrame()
+    df_conditions = pd.DataFrame(conditions_data) if conditions_data else pd.DataFrame()
+    df_interventions = pd.DataFrame(interventions_data) if interventions_data else pd.DataFrame()
+    df_collaborators = pd.DataFrame(collaborators_data) if collaborators_data else pd.DataFrame()
+    df_locations = pd.DataFrame(locations_data) if locations_data else pd.DataFrame()
     
-    # Generate output file names
+    # Remove text and list columns from main studies table
+    cols_to_drop = ['conditions', 'interventions', 'collaborators', 'locations', 
+                    'official_title', 'brief_summary', 'detailed_description']
+    df_studies = df_studies.drop(columns=[col for col in cols_to_drop if col in df_studies.columns])
+    
+    # Generate output file names and directory
     base_name = output_file.replace('.csv', '')
-    suffix = '_test' if test_mode else datetime.now().strftime('%d%m%Y')
+    if test_mode:
+        suffix = '_test'
+        csv_output_dir = Path('data') / 'csv' / f"test_{test_count}"
+    else:
+        date_str = datetime.now().strftime("%d%m%Y")
+        suffix = f"_{date_str}"
+        csv_output_dir = Path('data') / 'csv' / f"data_{date_str}"
+    
+    csv_output_dir.mkdir(parents=True, exist_ok=True)
     
     # Save all CSVs
     files_saved = {}
     
-    studies_path = f"{base_name}_{suffix}.csv"
-    df_studies.to_csv(studies_path, index=False)
-    files_saved['studies'] = (studies_path, df_studies.shape)
+    if 'studies' in tables:
+        studies_path = csv_output_dir / f"{base_name}_{suffix}.csv"
+        df_studies.to_csv(studies_path, index=False)
+        files_saved['studies'] = (str(studies_path), df_studies.shape)
     
-    if not df_conditions.empty:
-        conditions_path = f"{base_name}_conditions_{suffix}.csv"
+    if 'text' in tables and not df_text.empty:
+        text_path = csv_output_dir / f"{base_name}_text_{suffix}.csv"
+        df_text.to_csv(text_path, index=False)
+        files_saved['text'] = (str(text_path), df_text.shape)
+    
+    if 'conditions' in tables and not df_conditions.empty:
+        conditions_path = csv_output_dir / f"{base_name}_conditions_{suffix}.csv"
         df_conditions.to_csv(conditions_path, index=False)
-        files_saved['conditions'] = (conditions_path, df_conditions.shape)
+        files_saved['conditions'] = (str(conditions_path), df_conditions.shape)
     
-    if not df_interventions.empty:
-        interventions_path = f"{base_name}_interventions_{suffix}.csv"
+    if 'interventions' in tables and not df_interventions.empty:
+        interventions_path = csv_output_dir / f"{base_name}_interventions_{suffix}.csv"
         df_interventions.to_csv(interventions_path, index=False)
-        files_saved['interventions'] = (interventions_path, df_interventions.shape)
+        files_saved['interventions'] = (str(interventions_path), df_interventions.shape)
     
-    if not df_collaborators.empty:
-        collaborators_path = f"{base_name}_collaborators_{suffix}.csv"
+    if 'collaborators' in tables and not df_collaborators.empty:
+        collaborators_path = csv_output_dir / f"{base_name}_collaborators_{suffix}.csv"
         df_collaborators.to_csv(collaborators_path, index=False)
-        files_saved['collaborators'] = (collaborators_path, df_collaborators.shape)
+        files_saved['collaborators'] = (str(collaborators_path), df_collaborators.shape)
     
-    if not df_locations.empty:
-        locations_path = f"{base_name}_locations_{suffix}.csv"
+    if 'locations' in tables and not df_locations.empty:
+        locations_path = csv_output_dir / f"{base_name}_locations_{suffix}.csv"
         df_locations.to_csv(locations_path, index=False)
-        files_saved['locations'] = (locations_path, df_locations.shape)
+        files_saved['locations'] = (str(locations_path), df_locations.shape)
     
     # Print summary
     print(f"\n{'=' * 80}")
@@ -295,6 +339,7 @@ def process_studies(data_dir: str = "data", output_file: str = "studies.csv",
     
     return {
         'studies': df_studies,
+        'text': df_text,
         'conditions': df_conditions,
         'interventions': df_interventions,
         'collaborators': df_collaborators,
@@ -309,6 +354,9 @@ if __name__ == "__main__":
     parser.add_argument("--output", default="studies.csv", help="Output CSV file name prefix")
     parser.add_argument("--test", action="store_true", help="Test mode: only process first N studies")
     parser.add_argument("--test-count", type=int, default=100, help="Number of studies to process in test mode")
+    parser.add_argument("--tables", nargs='+',
+                       choices=['studies', 'conditions', 'interventions', 'collaborators', 'locations', 'text'],
+                       help="Specify which tables to generate. Default: all tables")
     
     args = parser.parse_args()
     
@@ -316,5 +364,6 @@ if __name__ == "__main__":
         data_dir=args.data_dir,
         output_file=args.output,
         test_mode=args.test,
-        test_count=args.test_count
+        test_count=args.test_count,
+        tables=args.tables
     )
