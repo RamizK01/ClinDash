@@ -5,7 +5,7 @@ from datetime import datetime
 from tqdm import tqdm
 
 def download_all_studies(output_dir="data"):
-    # Generate the date-based subdirectory name (DDMMYYYY)
+    # Create custom sub-directory based on current date
     date_str = datetime.now().strftime("%d%m%Y")
     sub_dir_name = f"data_{date_str}"
     target_path = os.path.join(output_dir, sub_dir_name)
@@ -23,16 +23,6 @@ def download_all_studies(output_dir="data"):
     zip_path = "AllPublicXML.zip"
     
     try:
-        # Check disk space (3 GB ZIP + ~10 GB extracted = need at least 15 GB free)
-        try:
-            stat = os.statvfs(output_dir if os.path.exists(output_dir) else ".")
-            free_space_gb = (stat.f_bavail * stat.f_frsize) / (1024**3)
-            if free_space_gb < 15:
-                raise Exception(f"Insufficient disk space: {free_space_gb:.1f} GB available (need ~15 GB)")
-            print(f"Available disk space: {free_space_gb:.1f} GB")
-        except Exception as e:
-            print(f"Warning: Could not check disk space - {e}")
-        
         # Download the ZIP file using streaming
         print(f"Downloading all study records to {zip_path}...")
         
@@ -99,7 +89,7 @@ def download_all_studies(output_dir="data"):
         raise
     
     finally:
-        # Always clean up ZIP file
+        # clean up ZIP file
         if os.path.exists(zip_path):
             os.remove(zip_path)
 
