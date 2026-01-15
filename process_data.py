@@ -32,13 +32,48 @@ def extract_text_with_attr(element, tag: str, attr: str = None, default: str = "
         pass
     return default
 
-def extract_list(element, tag: str) -> str:
-    """Extract multiple elements and join them."""
+def extract_list(element, tag: str) -> List[str]:
+    """Extract multiple elements and return as list."""
     try:
         items = [item.text.strip() for item in element.findall(tag) if item.text]
-        return "; ".join(items) if items else ""
+        return items
     except:
-        return ""
+        return []
+
+def extract_locations(root) -> List[Dict]:
+    """Extract location/facility information."""
+    locations = []
+    try:
+        for location in root.findall('location'):
+            loc_data = {}
+            
+            # Facility information
+            facility = location.find('facility')
+            if facility is not None:
+                loc_data['facility_name'] = extract_text(facility, 'name')
+                
+                # Address information
+                address = facility.find('address')
+                if address is not None:
+                    # Extract city and state (they may contain geolocation codes at the end)
+                    city = extract_text(address, 'city').strip()
+                    state = extract_text(address, 'state').strip()
+                    
+                    # Remove trailing numbers (geolocation codes)
+                    city_clean = ' '.join(city.split()[:-1]) if city and city[-1].isdigit() else city
+                    state_clean = ' '.join(state.split()[:-1]) if state and state[-1].isdigit() else state
+                    
+                    loc_data['city'] = city_clean
+                    loc_data['state'] = state_clean
+                    loc_data['country'] = extract_text(address, 'country')
+                    loc_data['postal_code'] = extract_text(address, 'zip')
+                
+                if loc_data.get('facility_name'):  # Only add if we have at least a facility name
+                    locations.append(loc_data)
+    except:
+        pass
+    
+    return locations
 
 def parse_clinical_trial(xml_file: str) -> Optional[Dict]:
     """Parse a single clinical trial XML file and extract relevant fields."""
@@ -96,7 +131,7 @@ def parse_clinical_trial(xml_file: str) -> Optional[Dict]:
             
             # Sponsor Information
             'lead_sponsor': extract_text(sponsors, 'lead_sponsor') if elem_exists(sponsors) else "",
-            'collaborators': extract_list(sponsors, 'collaborator') if elem_exists(sponsors) else "",
+            'collaborators': extract_list(sponsors, 'collaborator') if elem_exists(sponsors) else [],
             'source': extract_text(root, 'source'),
             
             # Study Population
@@ -105,11 +140,14 @@ def parse_clinical_trial(xml_file: str) -> Optional[Dict]:
             'maximum_age': extract_text(eligibility, 'maximum_age') if elem_exists(eligibility) else "",
             'accepts_healthy_volunteers': extract_text(eligibility, 'accepts_healthy_volunteers') if elem_exists(eligibility) else "",
             
-            # Conditions
+            # Conditions (as list)
             'conditions': extract_list(root, 'condition'),
             
-            # Interventions
+            # Interventions (as list)
             'interventions': extract_list(root, 'intervention_type'),
+            
+            # Locations (as list of dicts)
+            'locations': extract_locations(root),
             
             # Number of Arms
             'number_of_arms': extract_text(root, 'number_of_arms'),
@@ -158,7 +196,7 @@ def find_xml_files(data_dir: str, test_mode: bool = False, test_count: int = 100
 
 def process_studies(data_dir: str = "data", output_file: str = "studies.csv", 
                    test_mode: bool = False, test_count: int = 100):
-    """Process all clinical trial XML files and save to CSV."""
+    """Process all clinical trial XML files and save to normalized CSVs."""
     
     print(f"Finding XML files in {data_dir}...")
     xml_files = find_xml_files(data_dir, test_mode=test_mode, test_count=test_count)
@@ -177,33 +215,103 @@ def process_studies(data_dir: str = "data", output_file: str = "studies.csv",
         if study_data:
             studies.append(study_data)
     
-    # Create DataFrame
-    df = pd.DataFrame(studies)
+    # Create main studies DataFrame (without list columns)
+    df_studies = pd.DataFrame(studies)
     
-    # Save to CSV
-    output_path = f"{output_file.replace('.csv', '')}_{'test' if test_mode else datetime.now().strftime('%d%m%Y')}.csv"
-    df.to_csv(output_path, index=False)
+    # Extract conditions into separate table
+    conditions_data = []
+    for idx, row in df_studies.iterrows():
+        nct_id = row['nct_id']
+        for condition in row['conditions']:
+            conditions_data.append({'nct_id': nct_id, 'condition': condition})
+    df_conditions = pd.DataFrame(conditions_data)
     
-    print(f"\nProcessing complete!")
-    print(f"Processed {len(df)} studies")
-    print(f"Saved to {output_path}")
-    print(f"\nDataFrame shape: {df.shape}")
-    print(f"Columns: {list(df.columns)}")
+    # Extract interventions into separate table
+    interventions_data = []
+    for idx, row in df_studies.iterrows():
+        nct_id = row['nct_id']
+        for intervention in row['interventions']:
+            interventions_data.append({'nct_id': nct_id, 'intervention_type': intervention})
+    df_interventions = pd.DataFrame(interventions_data)
     
-    return df
+    # Extract collaborators into separate table
+    collaborators_data = []
+    for idx, row in df_studies.iterrows():
+        nct_id = row['nct_id']
+        for collaborator in row['collaborators']:
+            collaborators_data.append({'nct_id': nct_id, 'collaborator': collaborator})
+    df_collaborators = pd.DataFrame(collaborators_data)
+    
+    # Extract locations into separate table
+    locations_data = []
+    for idx, row in df_studies.iterrows():
+        nct_id = row['nct_id']
+        for location in row['locations']:
+            location['nct_id'] = nct_id
+            locations_data.append(location)
+    df_locations = pd.DataFrame(locations_data)
+    
+    # Remove list columns from main studies table
+    df_studies = df_studies.drop(columns=['conditions', 'interventions', 'collaborators', 'locations'])
+    
+    # Generate output file names
+    base_name = output_file.replace('.csv', '')
+    suffix = '_test' if test_mode else datetime.now().strftime('%d%m%Y')
+    
+    # Save all CSVs
+    files_saved = {}
+    
+    studies_path = f"{base_name}_{suffix}.csv"
+    df_studies.to_csv(studies_path, index=False)
+    files_saved['studies'] = (studies_path, df_studies.shape)
+    
+    if not df_conditions.empty:
+        conditions_path = f"{base_name}_conditions_{suffix}.csv"
+        df_conditions.to_csv(conditions_path, index=False)
+        files_saved['conditions'] = (conditions_path, df_conditions.shape)
+    
+    if not df_interventions.empty:
+        interventions_path = f"{base_name}_interventions_{suffix}.csv"
+        df_interventions.to_csv(interventions_path, index=False)
+        files_saved['interventions'] = (interventions_path, df_interventions.shape)
+    
+    if not df_collaborators.empty:
+        collaborators_path = f"{base_name}_collaborators_{suffix}.csv"
+        df_collaborators.to_csv(collaborators_path, index=False)
+        files_saved['collaborators'] = (collaborators_path, df_collaborators.shape)
+    
+    if not df_locations.empty:
+        locations_path = f"{base_name}_locations_{suffix}.csv"
+        df_locations.to_csv(locations_path, index=False)
+        files_saved['locations'] = (locations_path, df_locations.shape)
+    
+    # Print summary
+    print(f"\n{'=' * 80}")
+    print("Processing complete!")
+    print(f"{'=' * 80}")
+    for table_name, (path, shape) in files_saved.items():
+        print(f"{table_name:20s} → {path:40s} ({shape[0]:6d} rows × {shape[1]:2d} cols)")
+    
+    return {
+        'studies': df_studies,
+        'conditions': df_conditions,
+        'interventions': df_interventions,
+        'collaborators': df_collaborators,
+        'locations': df_locations
+    }
 
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description="Process clinical trial XML files into CSV")
+    parser = argparse.ArgumentParser(description="Process clinical trial XML files into normalized CSVs")
     parser.add_argument("--data-dir", default="data", help="Path to data directory containing XML files")
-    parser.add_argument("--output", default="studies.csv", help="Output CSV file name")
+    parser.add_argument("--output", default="studies.csv", help="Output CSV file name prefix")
     parser.add_argument("--test", action="store_true", help="Test mode: only process first N studies")
     parser.add_argument("--test-count", type=int, default=100, help="Number of studies to process in test mode")
     
     args = parser.parse_args()
     
-    df = process_studies(
+    dfs = process_studies(
         data_dir=args.data_dir,
         output_file=args.output,
         test_mode=args.test,
