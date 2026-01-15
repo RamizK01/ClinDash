@@ -8,7 +8,7 @@ def download_all_studies(output_dir="data"):
     # Create custom sub-directory based on current date
     date_str = datetime.now().strftime("%d%m%Y")
     sub_dir_name = f"data_{date_str}"
-    target_path = os.path.join(output_dir, sub_dir_name)
+    target_path = os.path.join(output_dir, "xml", sub_dir_name)
     
     # Check if data already downloaded today
     if os.path.exists(target_path):
