@@ -4,19 +4,19 @@
 
 Process all studies and generate all tables:
 ```bash
-python process_data.py
+python process.py
 ```
 
 ## Test Mode
 
 Process only the first 100 studies:
 ```bash
-python process_data.py --test
+python process.py --test
 ```
 
 Process the first 500 studies:
 ```bash
-python process_data.py --test --test-count 500
+python processpy --test --test-count 500
 ```
 
 ## Selective Table Generation
@@ -25,16 +25,16 @@ Generate only specific tables using the `--tables` option:
 
 ```bash
 # Generate only studies and text tables (good for ML features + NLP text processing)
-python process_data.py --tables studies text
+python process.py --tables studies text
 
 # Generate only studies and conditions (for condition-based features)
-python process_data.py --tables studies conditions
+python process.py --tables studies conditions
 
 # Generate everything except text (to save time/space)
-python process_data.py --tables studies conditions interventions collaborators locations
+python process.py --tables studies conditions interventions collaborators locations
 
 # Interventions only with conditions
-python process_data.py --tables studies interventions
+python process.py --tables studies interventions
 ```
 
 ## Available Tables
@@ -63,11 +63,11 @@ studies_locations_15012026.csv
 
 Specify a custom data directory:
 ```bash
-python process_data.py --data-dir /path/to/data
+python process.py --data-dir /path/to/data
 ```
 
 ## Help
 
 ```bash
-python process_data.py --help
+python process.py --help
 ```
